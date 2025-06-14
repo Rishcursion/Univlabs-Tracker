@@ -1,0 +1,163 @@
+@import 'tailwindcss';
+
+@theme {
+	/* Primary Colors */
+	--color-primary-25: #f8faff;
+	--color-primary-50: #eff6ff;
+	--color-primary-100: #dbeafe;
+	--color-primary-200: #bfdbfe;
+	--color-primary-300: #93c5fd;
+	--color-primary-400: #60a5fa;
+	--color-primary-500: #3b82f6;
+	--color-primary-600: #2563eb;
+	--color-primary-700: #1d4ed8;
+	--color-primary-800: #1e40af;
+	--color-primary-900: #1e3a8a;
+
+	/* Secondary Colors */
+	--color-secondary-50: #f0fdfa;
+	--color-secondary-100: #ccfbf1;
+	--color-secondary-200: #99f6e4;
+	--color-secondary-300: #5eead4;
+	--color-secondary-400: #2dd4bf;
+	--color-secondary-500: #14b8a6;
+	--color-secondary-600: #0d9488;
+	--color-secondary-700: #0f766e;
+	--color-secondary-800: #115e59;
+	--color-secondary-900: #134e4a;
+
+	/* Medical Colors */
+	--color-medical-25: #fafbfc;
+	--color-medical-50: #f8fafc;
+	--color-medical-100: #f1f5f9;
+	--color-medical-200: #e2e8f0;
+	--color-medical-300: #cbd5e1;
+	--color-medical-400: #94a3b8;
+	--color-medical-500: #64748b;
+	--color-medical-600: #475569;
+	--color-medical-700: #334155;
+	--color-medical-800: #1e293b;
+	--color-medical-900: #0f172a;
+
+	/* Font */
+	--font-medical: 'Inter', system-ui, sans-serif;
+}
+
+/* === Custom Animations === */
+@utilities {
+	@keyframes fadeIn {
+		0% {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes slideUp {
+		0% {
+			opacity: 0;
+			transform: translateY(20px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes slideDown {
+		0% {
+			opacity: 0;
+			transform: translateY(-20px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes scaleIn {
+		0% {
+			opacity: 0;
+			transform: scale(0.95);
+		}
+		100% {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
+	@keyframes pulseSubtle {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.8;
+		}
+	}
+
+	@keyframes bounceSubtle {
+		0%,
+		100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(-5px);
+		}
+	}
+
+	@keyframes shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	.animate-fade-in {
+		animation: fadeIn 0.6s ease-out;
+	}
+
+	.animate-slide-up {
+		animation: slideUp 0.4s ease-out;
+	}
+
+	.animate-slide-down {
+		animation: slideDown 0.4s ease-out;
+	}
+
+	.animate-scale-in {
+		animation: scaleIn 0.3s ease-out;
+	}
+
+	.animate-pulse-subtle {
+		animation: pulseSubtle 2s ease-in-out infinite;
+	}
+
+	.animate-bounce-subtle {
+		animation: bounceSubtle 1s ease-in-out infinite;
+	}
+
+	.animate-shimmer {
+		animation: shimmer 2s linear infinite;
+	}
+}
+
+/* === Custom Utilities === */
+@utilities {
+	.backdrop-blur-xs {
+		backdrop-filter: blur(2px);
+	}
+
+	.spacing-18 {
+		margin: 4.5rem;
+	}
+
+	.spacing-88 {
+		margin: 22rem;
+	}
+}
