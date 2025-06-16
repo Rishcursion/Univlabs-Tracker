@@ -28,6 +28,7 @@
 		"@tailwindcss/vite": "^4.0.0",
 		"@testing-library/jest-dom": "^6.6.3",
 		"@testing-library/svelte": "^5.2.4",
+		"@types/file-saver": "^2.0.7",
 		"eslint": "^9.18.0",
 		"eslint-config-prettier": "^10.0.1",
 		"eslint-plugin-svelte": "^3.0.0",
@@ -52,6 +53,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^0.514.0",
-		"daisyui": "^5.0.43"
+		"daisyui": "^5.0.43",
+		"file-saver": "^2.0.5"
 	}
 }

@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { onMount, createEventDispatcher } from 'svelte';
+	import {onMount, createEventDispatcher} from 'svelte';
 
-	const dispatch = createEventDispatcher<{
+	const dispatch = createEventDispatcher < {
 		'annotation-created': any;
-	}>();
+	} > ();
 
 	export let videoElement: HTMLVideoElement;
 	export let annotationMode: 'positive' | 'negative' | 'box' = 'positive';
@@ -41,37 +41,6 @@
 		}
 	}
 
-	// Mock API call to send annotation to backend
-	async function sendAnnotationToBackend(annotation: any) {
-		try {
-			console.log('Sending annotation to backend:', annotation);
-
-			// Simulate API call
-			const response = await fetch('/api/annotations', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					annotation,
-					videoId: 'current-video-id',
-					timestamp: Date.now(),
-					sessionId: 'current-session-id'
-				})
-			});
-
-			// Since this is a mock, we'll simulate the response
-			if (!response.ok) {
-				throw new Error('Failed to send annotation');
-			}
-
-			console.log('Annotation sent successfully');
-		} catch (error) {
-			console.error('Error sending annotation to backend:', error);
-			// In a real app, you might want to show a toast notification or retry
-		}
-	}
-
 	function handleMouseDown(event: MouseEvent) {
 		if (annotationMode === 'box') {
 			const rect = canvas.getBoundingClientRect();
@@ -96,7 +65,7 @@
 		drawRect(startX, startY, currentX - startX, currentY - startY, '#3b82f6', false);
 	}
 
-	async function handleMouseUp(event: MouseEvent) {
+	function handleMouseUp(event: MouseEvent) {
 		if (!isDrawing || annotationMode !== 'box') return;
 
 		const rect = canvas.getBoundingClientRect();
@@ -118,16 +87,13 @@
 		if (annotation.width > 10 && annotation.height > 10) {
 			annotations = [...annotations, annotation];
 			dispatch('annotation-created', annotation);
-
-			// Send to backend
-			await sendAnnotationToBackend(annotation);
 		}
 
 		isDrawing = false;
 		redrawAnnotations();
 	}
 
-	async function handleClick(event: MouseEvent) {
+	function handleClick(event: MouseEvent) {
 		if (isDrawing || annotationMode === 'box') return;
 
 		const rect = canvas.getBoundingClientRect();
@@ -146,22 +112,13 @@
 		annotations = [...annotations, annotation];
 		dispatch('annotation-created', annotation);
 
-		// Send to backend
-		await sendAnnotationToBackend(annotation);
-
+		// Immediately redraw to show the new annotation
 		redrawAnnotations();
 	}
 
-	function drawRect(
-		x: number,
-		y: number,
-		width: number,
-		height: number,
-		color: string,
-		filled: boolean = false
-	) {
+	function drawRect(x: number, y: number, width: number, height: number, color: string, filled: boolean = false) {
 		ctx.strokeStyle = color;
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 3;
 
 		if (filled) {
 			ctx.fillStyle = color + '33'; // Add transparency
@@ -175,24 +132,24 @@
 		// Draw green circle for positive points
 		ctx.fillStyle = '#10b981';
 		ctx.beginPath();
-		ctx.arc(x, y, 8, 0, 2 * Math.PI);
+		ctx.arc(x, y, 10, 0, 2 * Math.PI);
 		ctx.fill();
 
 		// Draw white border
 		ctx.strokeStyle = 'white';
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 3;
 		ctx.beginPath();
-		ctx.arc(x, y, 8, 0, 2 * Math.PI);
+		ctx.arc(x, y, 10, 0, 2 * Math.PI);
 		ctx.stroke();
 
 		// Draw plus sign
 		ctx.strokeStyle = 'white';
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 3;
 		ctx.beginPath();
-		ctx.moveTo(x - 4, y);
-		ctx.lineTo(x + 4, y);
-		ctx.moveTo(x, y - 4);
-		ctx.lineTo(x, y + 4);
+		ctx.moveTo(x - 5, y);
+		ctx.lineTo(x + 5, y);
+		ctx.moveTo(x, y - 5);
+		ctx.lineTo(x, y + 5);
 		ctx.stroke();
 	}
 
@@ -200,22 +157,22 @@
 		// Draw red circle for negative points
 		ctx.fillStyle = '#ef4444';
 		ctx.beginPath();
-		ctx.arc(x, y, 8, 0, 2 * Math.PI);
+		ctx.arc(x, y, 10, 0, 2 * Math.PI);
 		ctx.fill();
 
 		// Draw white border
 		ctx.strokeStyle = 'white';
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 3;
 		ctx.beginPath();
-		ctx.arc(x, y, 8, 0, 2 * Math.PI);
+		ctx.arc(x, y, 10, 0, 2 * Math.PI);
 		ctx.stroke();
 
 		// Draw minus sign
 		ctx.strokeStyle = 'white';
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 3;
 		ctx.beginPath();
-		ctx.moveTo(x - 4, y);
-		ctx.lineTo(x + 4, y);
+		ctx.moveTo(x - 5, y);
+		ctx.lineTo(x + 5, y);
 		ctx.stroke();
 	}
 
@@ -224,7 +181,7 @@
 
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-		annotations.forEach((annotation) => {
+		annotations.forEach(annotation => {
 			if (annotation.type === 'box') {
 				drawRect(annotation.x, annotation.y, annotation.width, annotation.height, '#3b82f6', true);
 			} else if (annotation.type === 'positive_point') {
@@ -247,12 +204,6 @@
 	}
 </script>
 
-<canvas
-	bind:this={canvas}
-	class="absolute inset-0 z-10 h-full w-full cursor-crosshair"
-	on:mousedown={handleMouseDown}
-	on:mousemove={handleMouseMove}
-	on:mouseup={handleMouseUp}
-	on:click={handleClick}
-	style="pointer-events: auto;"
-></canvas>
+<canvas bind:this={canvas} class="absolute inset-0 w-full h-full cursor-crosshair z-10" on:mousedown={handleMouseDown}
+	on:mousemove={handleMouseMove} on:mouseup={handleMouseUp} on:click={handleClick}
+	style="pointer-events: auto;"></canvas>

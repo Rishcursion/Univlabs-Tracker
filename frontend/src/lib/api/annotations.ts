@@ -36,7 +36,7 @@ export async function sendAnnotation(
 	annotation: AnnotationData
 ): Promise<{ success: boolean; id?: string }> {
 	try {
-		console.log('Sending annotation to backend:', annotation);
+		console.log('📤 Sending annotation to backend:', annotation);
 
 		// Simulate API call delay
 		await delay(200 + Math.random() * 300);

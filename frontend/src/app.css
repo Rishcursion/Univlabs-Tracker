@@ -1,0 +1,281 @@
+@import 'tailwindcss';
+
+@theme {
+    /* Primary Colors */
+    --color-primary-25: #f8faff;
+    --color-primary-50: #eff6ff;
+    --color-primary-100: #dbeafe;
+    --color-primary-200: #bfdbfe;
+    --color-primary-300: #93c5fd;
+    --color-primary-400: #60a5fa;
+    --color-primary-500: #3b82f6;
+    --color-primary-600: #2563eb;
+    --color-primary-700: #1d4ed8;
+    --color-primary-800: #1e40af;
+    --color-primary-900: #1e3a8a;
+
+    /* Secondary Colors */
+    --color-secondary-50: #f0fdfa;
+    --color-secondary-100: #ccfbf1;
+    --color-secondary-200: #99f6e4;
+    --color-secondary-300: #5eead4;
+    --color-secondary-400: #2dd4bf;
+    --color-secondary-500: #14b8a6;
+    --color-secondary-600: #0d9488;
+    --color-secondary-700: #0f766e;
+    --color-secondary-800: #115e59;
+    --color-secondary-900: #134e4a;
+
+    /* Medical Colors */
+    --color-medical-25: #fafbfc;
+    --color-medical-50: #f8fafc;
+    --color-medical-100: #f1f5f9;
+    --color-medical-200: #e2e8f0;
+    --color-medical-300: #cbd5e1;
+    --color-medical-400: #94a3b8;
+    --color-medical-500: #64748b;
+    --color-medical-600: #475569;
+    --color-medical-700: #334155;
+    --color-medical-800: #1e293b;
+    --color-medical-900: #0f172a;
+
+    /* Font */
+    --font-medical: 'Inter', system-ui, sans-serif;
+}
+
+@base {
+    html {
+        font-family: var(--font-medical);
+    }
+    body {
+        @apply antialiased;
+    }
+}
+
+@components {
+    .btn-primary {
+        @apply bg-primary-500 hover:bg-primary-600 focus:ring-primary-500 rounded-lg px-6 py-3 font-medium text-white transition-all duration-200 focus:ring-2 focus:ring-offset-2 focus:outline-none;
+    }
+    .btn-secondary {
+        @apply bg-secondary-500 hover:bg-secondary-600 focus:ring-secondary-500 rounded-lg px-6 py-3 font-medium text-white transition-all duration-200 focus:ring-2 focus:ring-offset-2 focus:outline-none;
+    }
+    .btn-outline {
+        @apply border-primary-500 text-primary-500 hover:bg-primary-500 focus:ring-primary-500 rounded-lg border-2 px-6 py-3 font-medium transition-all duration-200 hover:text-white focus:ring-2 focus:ring-offset-2 focus:outline-none;
+    }
+    .card {
+        @apply border-medical-200 rounded-xl border bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl;
+    }
+    .card-compact {
+        @apply border-medical-200 rounded-xl border bg-white p-6 shadow-md transition-all duration-300 hover:shadow-lg;
+    }
+    .upload-zone {
+        @apply border-medical-300 hover:border-primary-400 hover:bg-primary-25 rounded-xl border-2 border-dashed p-12 text-center transition-all duration-300;
+    }
+    .upload-zone.dragover {
+        @apply border-primary-500 bg-primary-50 scale-105;
+    }
+    .video-container {
+        @apply relative overflow-hidden rounded-xl bg-black shadow-2xl;
+    }
+    .annotation-overlay {
+        @apply absolute inset-0 transition-opacity duration-300;
+    }
+    .control-panel {
+        @apply border-medical-200 rounded-xl border bg-white/95 p-6 shadow-lg backdrop-blur-sm;
+    }
+    .progress-step {
+        @apply flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-all duration-300;
+    }
+    .progress-step.active {
+        @apply bg-primary-500 scale-110 text-white shadow-lg;
+    }
+    .progress-step.completed {
+        @apply bg-green-500 text-white shadow-md;
+    }
+    .progress-step.inactive {
+        @apply bg-medical-200 text-medical-600;
+    }
+    .floating-controls {
+        @apply border-medical-200 fixed right-8 bottom-8 rounded-2xl border bg-white bg-white/95 p-4 shadow-2xl backdrop-blur-sm;
+    }
+    .interactive-btn {
+        @apply transition-all duration-150 ease-in-out;
+    }
+    .interactive-btn:hover:not(:disabled) {
+        @apply scale-105 transform;
+    }
+    .interactive-btn:active:not(:disabled) {
+        @apply scale-95 transform;
+    }
+    .interactive-btn:disabled {
+        @apply cursor-not-allowed opacity-60;
+        transform: none !important;
+    }
+    /* Button hover and active states */
+    .btn-primary:hover:not(:disabled),
+    .btn-secondary:hover:not(:disabled),
+    .btn-outline:hover:not(:disabled) {
+        @apply scale-105 transform;
+    }
+    .btn-primary:active:not(:disabled),
+    .btn-secondary:active:not(:disabled),
+    .btn-outline:active:not(:disabled) {
+        @apply scale-95 transform;
+    }
+}
+
+@utilities {
+    /* Animations */
+    @keyframes fadeIn {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    @keyframes slideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    @keyframes slideDown {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    @keyframes scaleIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    @keyframes pulseSubtle {
+        0%,
+        100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.8;
+        }
+    }
+    @keyframes bounceSubtle {
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(-5px);
+        }
+    }
+    @keyframes shimmer {
+        0% {
+            transform: translateX(-100%);
+        }
+        100% {
+            transform: translateX(100%);
+        }
+    }
+    .animate-fade-in {
+        animation: fadeIn 0.6s ease-out;
+    }
+    .animate-slide-up {
+        animation: slideUp 0.4s ease-out;
+    }
+    .animate-slide-down {
+        animation: slideDown 0.4s ease-out;
+    }
+    .animate-scale-in {
+        animation: scaleIn 0.3s ease-out;
+    }
+    .animate-pulse-subtle {
+        animation: pulseSubtle 2s ease-in-out infinite;
+    }
+    .animate-bounce-subtle {
+        animation: bounceSubtle 1s ease-in-out infinite;
+    }
+    .animate-shimmer {
+        animation: shimmer 2s linear infinite;
+    }
+
+    .backdrop-blur-xs {
+        backdrop-filter: blur(2px);
+    }
+    .spacing-18 {
+        margin: 4.5rem;
+    }
+    .spacing-88 {
+        margin: 22rem;
+    }
+}
+
+/* === Enhanced Annotorious styles === */
+.a9s-annotation {
+    stroke: var(--color-primary-500);
+    stroke-width: 2;
+    fill: rgba(59, 130, 246, 0.15);
+    transition: all 0.2s ease;
+}
+.a9s-annotation:hover {
+    stroke-width: 3;
+    fill: rgba(59, 130, 246, 0.25);
+}
+.a9s-annotation.selected {
+    stroke: var(--color-primary-700);
+    stroke-width: 3;
+    fill: rgba(29, 78, 216, 0.3);
+}
+.a9s-handle {
+    fill: var(--color-primary-500);
+    stroke: white;
+    stroke-width: 2;
+    transition: all 0.2s ease;
+}
+.a9s-handle:hover {
+    fill: var(--color-primary-700);
+    transform: scale(1.2);
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: var(--color-medical-100);
+    border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-medical-300);
+    border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--color-medical-400);
+}
+
+/* Glassmorphism */
+.glass {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Loading indicator */
+.loading-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
