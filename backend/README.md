@@ -22,8 +22,7 @@ A FastAPI-based backend for medical video segmentation using MedSAM2. This appli
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd <your-repo-name>
+git clone git@github.com:Rishcursion/Univlabs-Tracker.git && cd backend 
 ```
 
 ### 2. Initialize MedSAM2 Submodule
@@ -36,7 +35,7 @@ git submodule update --init --recursive
 ### 3. Install Dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 4. Install FFmpeg
@@ -46,7 +45,11 @@ pip install -r requirements.txt
 sudo apt update
 sudo apt install ffmpeg
 ```
-
+**Arch:**
+```bash
+sudo pacman -Syu
+sudo pacman -S ffmpeg 
+```
 **Windows:**
 - Download from [FFmpeg official website](https://ffmpeg.org/download.html)
 - Add to PATH environment variable
@@ -64,7 +67,9 @@ mkdir -p MedSAM2/checkpoints
 
 # Download the MedSAM2 checkpoint (replace with actual download link)
 # You may need to register and download from the official MedSAM2 repository
-wget -O MedSAM2/checkpoints/MedSAM2_latest.pt <checkpoint-download-url>
+cd MedSAM2
+sudo chmod -x download.sh
+./download.sh
 ```
 
 **Note**: Check the [MedSAM2 repository](https://github.com/bowang-lab/MedSAM2) for the latest checkpoint download instructions.
@@ -100,7 +105,7 @@ For GPUs with limited VRAM (like MX450 with 2GB):
 ### 1. Start the Server
 
 ```bash
-python app.py
+fastapi dev inference_medsam2.py
 ```
 
 The server will start on `http://localhost:8000`
@@ -190,7 +195,7 @@ max_clip_length = "00:10:00"  # 10-minute clips
 
 | GPU | VRAM | 10-sec clip (198 frames) | 30-min estimated |
 |-----|------|--------------------------|------------------|
-| MX450 | 2GB | 48 seconds | ~3 hours |
+| MX450(Tested On) | 2GB | 48 seconds | ~3 hours |
 | RTX 4080 | 16GB | ~12 seconds | ~45 minutes |
 | RTX 4090 | 24GB | ~8 seconds | ~30 minutes |
 
@@ -198,16 +203,44 @@ max_clip_length = "00:10:00"  # 10-minute clips
 
 ```
 .
-├── app.py                 # Main FastAPI application
-├── requirements.txt       # Python dependencies
-├── README.md             # This file
-├── MedSAM2/              # MedSAM2 submodule
-│   ├── checkpoints/      # Model checkpoints
-│   ├── configs/          # Model configurations
-│   └── sam2/             # MedSAM2 source code
-└── tmp/                  # Temporary files (created automatically)
-    └── <session-id>/     # Per-session directories
-```
+├── assets
+├── MedSAM2
+│   ├── examples
+│   ├── notebooks
+│   ├── sam2
+│   │   ├── configs
+│   │   ├── csrc
+│   │   ├── modeling
+│   │   │   ├── backbones
+│   │   │   └── sam
+│   │   └── utils
+│   └── training
+│       ├── assets
+│       ├── dataset
+│       ├── model
+│       ├── scripts
+│       └── utils
+├── __pycache__
+├── sam2
+│   ├── configs
+│   │   ├── sam2
+│   │   ├── sam2.1
+│   │   └── sam2.1_training
+│   ├── csrc
+│   ├── modeling
+│   │   ├── backbones
+│   │   └── sam
+│   └── utils
+├── sav_dataset
+│   ├── example
+│   └── utils
+├── tools
+└── training
+    ├── assets
+    ├── dataset
+    ├── model
+    ├── scripts
+    └── utils
 
 ## Contributing
 
@@ -219,7 +252,7 @@ max_clip_length = "00:10:00"  # 10-minute clips
 
 ## License
 
-This project follows the licensing terms of the MedSAM2 project. Please refer to the [MedSAM2 repository](https://github.com/bowang-lab/MedSAM2) for license details.
+This project follows the licensing terms of the MedSAM2 and SAM2 project. Please refer to the [MedSAM2 repository](https://github.com/bowang-lab/MedSAM2) for license details.
 
 ## Acknowledgments
 
