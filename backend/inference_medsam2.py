@@ -36,7 +36,7 @@ app.add_middleware(
 # --- Model and Session Management ---
 # Dictionary to hold session states
 session_states = {}
-
+obj_color = {}
 try:
     # IMPORTANT: Update these paths to your MedSAM2 model and config file
     checkpoint = "./MedSAM2/checkpoints/MedSAM2_latest.pt"
@@ -259,7 +259,7 @@ async def add_new_points(data: ClickData):
         input_image_path = os.path.join(frames_dir, frame_filename)
         input_image = cv2.imread(input_image_path)
         overlay = input_image.copy()
-
+        start_col = 0
         colors = [
             (255, 0, 0),  # Red
             (0, 255, 0),  # Green
@@ -288,7 +288,9 @@ async def add_new_points(data: ClickData):
             rleMaskList.append({"objectId": objId, "rleMask": uncompressed_rle})
 
             # Create preview mask
-            color = colors[objId % len(colors)]
+            color = colors[start_col]
+            start_col += 1
+            obj_color[objId] = color
             combined_mask = None
             for rle_dict in uncompressed_rle:
                 single_mask = rle_to_mask(rle_dict)
@@ -502,7 +504,7 @@ async def generate_video(data: GenerateData):
             object_colors = []
 
             for idx, result in enumerate(frame_results):
-                color_idx = idx % len(colors)
+                color_idx = obj_color[idx]
                 color = colors[color_idx]
 
                 # Process RLE masks more efficiently
@@ -587,7 +589,7 @@ async def generate_video(data: GenerateData):
                         overlay[border_mask] = [255, 255, 255]
 
         # Blend images
-        alpha = 0.2
+        alpha = 0.45
         cv2.addWeighted(overlay, alpha, input_image, 1 - alpha, 0, overlay)
 
         # Resize only once at the end
@@ -636,22 +638,19 @@ async def generate_video(data: GenerateData):
         "-i",
         f"{output_dir}/%03d.png",
         "-c:v",
-        "libvpx-vp9",
+        "vp9_nvenc",  # Use the NVIDIA hardware encoder for VP9
         "-pix_fmt",
         "yuv420p",
         "-b:v",
         "2M",
-        "-threads",
-        "0",  # Use all available CPU cores
-        "-tile-columns",
-        "2",  # VP9 optimization
-        "-frame-parallel",
-        "1",  # VP9 optimization
-        "-speed",
-        "2",  # Balance between speed and quality
+        "-rc",
+        "vbr",  # Use variable bitrate for rate control
+        "-cq",
+        "28",  # Constant quality mode (0-51, lower is better)
+        "-preset",
+        "fast",  # NVENC has its own presets: slow, medium, fast, hq, etc.
         output_video_path,
     ]
-
     try:
         subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
@@ -688,6 +687,7 @@ async def delete_session(session_id: str):
         shutil.rmtree(frames_dir)
     logger.info(f"[{session_id}] Session deleted and files cleaned up.")
     return {"message": "Session deleted successfully."}
+
 
 # --- Main execution ---
 if __name__ == "__main__":
