@@ -11,9 +11,9 @@
 MedSAM2 Interface is a cutting-edge medical image segmentation application designed as part of the **Collaborative Surgery Module** for UnivLabs. This proof-of-concept platform enables medical professionals and researchers to upload surgical videos and perform advanced segmentation tasks with precision and ease.
 
 ### Video Demo
-<video width="360" height="240" controls>
-<source src="./assets/output.mp4", type="video/mp4">
-<video/>
+
+https://github.com/user-attachments/assets/b976b12c-96ba-43f1-96d7-611029a36775
+
 ### Key Features
 
 - **Surgical Video Upload**: Seamlessly upload and process surgical video files
