@@ -12,7 +12,7 @@ A FastAPI-based backend for medical video segmentation using MedSAM2. This appli
 
 ## Prerequisites
 
-- **GPU Requirements**: NVIDIA GPU with CUDA support (minimum 4GB VRAM recommended)
+- **GPU Requirements**: NVIDIA GPU with CUDA support (2 GB VRAM for 1280x720p@30fps for 10 seconds)
 - **Python**: 3.8 or higher
 - **FFmpeg**: Required for video processing
 - **CUDA Toolkit**: Compatible with your PyTorch installation
@@ -25,17 +25,21 @@ A FastAPI-based backend for medical video segmentation using MedSAM2. This appli
 git clone git@github.com:Rishcursion/Univlabs-Tracker.git && cd backend 
 ```
 
-### 2. Initialize MedSAM2 Submodule
+### 2. Clone MedSAM2 Repository 
 
 ```bash
-git submodule add https://github.com/bowang-lab/MedSAM2.git
-git submodule update --init --recursive
+git clone https://github.com/bowang-lab/MedSAM2.git
+cd MedSAM2
+# Install Checkpoints
+sudo chmod +x download.sh
+./download.sh
 ```
 
 ### 3. Install Dependencies
 
 ```bash
 pip install -e .
+pip install 'fastapi[standard]'
 ```
 
 ### 4. Install FFmpeg
@@ -57,19 +61,6 @@ sudo pacman -S ffmpeg
 **macOS:**
 ```bash
 brew install ffmpeg
-```
-
-### 5. Download MedSAM2 Model Checkpoint
-
-```bash
-# Create checkpoints directory
-mkdir -p MedSAM2/checkpoints
-
-# Download the MedSAM2 checkpoint (replace with actual download link)
-# You may need to register and download from the official MedSAM2 repository
-cd MedSAM2
-sudo chmod -x download.sh
-./download.sh
 ```
 
 **Note**: Check the [MedSAM2 repository](https://github.com/bowang-lab/MedSAM2) for the latest checkpoint download instructions.
@@ -108,7 +99,7 @@ For GPUs with limited VRAM (like MX450 with 2GB):
 fastapi dev inference_medsam2.py
 ```
 
-The server will start on `http://localhost:8000`
+The server will start on `http://localhost:8000`, or you can change the port as desired.
 
 ### 2. API Documentation
 
@@ -117,7 +108,7 @@ Once running, visit:
 - **ReDoc**: `http://localhost:8000/redoc`
 
 ### 3. API Endpoints
-
+**Refer To inference_medsam2.py for pydantic model definitions to ensure compatibility with the below API**
 #### Upload Video and Create Session
 ```http
 POST /create_session_upload/
@@ -157,7 +148,7 @@ DELETE /delete_session/{session_id}
 ```python
 # Example parameters for MX450 (2GB VRAM)
 downsample_factor = 4  # Reduce resolution by 4x
-max_clip_length = "00:00:30"  # 30-second clips
+max_clip_length = "00:00:15"  # 30-second clips
 ```
 
 ### For High-End GPUs (16GB+)
@@ -196,9 +187,11 @@ max_clip_length = "00:10:00"  # 10-minute clips
 | GPU | VRAM | 10-sec clip (198 frames) | 30-min estimated |
 |-----|------|--------------------------|------------------|
 | MX450(Tested On) | 2GB | 48 seconds | ~3 hours |
-| RTX 4080 | 16GB | ~12 seconds | ~45 minutes |
-| RTX 4090 | 24GB | ~8 seconds | ~30 minutes |
+| RTX 4080* | 16GB | ~12 seconds | ~45 minutes |
+| RTX 4090* | 24GB | ~8 seconds | ~30 minutes |
 
+
+\* Not tested on, only indicative performance.
 ## Directory Structure
 
 ```

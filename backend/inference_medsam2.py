@@ -1,9 +1,11 @@
 import base64
+import concurrent.futures
 import logging
 import os
 import shutil
 import subprocess
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
 import cv2
@@ -102,6 +104,24 @@ async def create_session_upload(
     end_time: Optional[str] = None,
     downsample_factor: Optional[int] = None,
 ):
+    """POST endpoint for instantiating session with uploaded file.
+
+    POST endpoint that handles creating sessions and storing the video uploaded by the user
+    using postprocessing and ffmpeg, postprocessing includes downsampling the given frames
+    by a pre-defined factor
+
+    Args:
+        video_file: The video to be used for inference
+        start_time: The timestamp of the video from where inference should start
+        end_time: The timestamp of the video until which inference should run.
+        downsample_factor: The factor by which the video should be downsampled based on the
+        original aspect ratio and resolution. i.e. 1280x720p downsampled by a factor of 2,
+        would be stored as 480x360 frames.
+
+    Raises:
+        HTTPException: If FFmpeg fails to extract frames for the video or the ffmpeg command is not found.
+        HTTPException: Unexpected error due to compromised frontend or other untested bugs. e.g. malformed data/unprocessable entity etc..
+    """
     session_id = str(uuid.uuid4())
     frames_dir = f"./tmp/{session_id}"
     try:
@@ -193,6 +213,22 @@ async def create_session_upload(
 
 @app.post("/add_new_points/")
 async def add_new_points(data: ClickData):
+    """POST endpoint for handling new points added by the user.
+
+    POST endpoint where new points added by the user are utilized to generate a static mask for the
+    current frame, so that the user will have an idea of how the mask will look like, i.e. real-time
+    feedback. This endpoint also handles adding the points to the inference state of the model for
+    mask propogation at a later stage
+
+    Args:
+        data: a JSON object, containing meta-data related to the points added by the user such as
+        objectId, x-coordinate, y-coordinate, video timestamp etc.., refer to pydantic object
+        ClickData, for the exact structure.
+
+    Raises:
+        HTTPException: If points are added but there are no related sessions active on the backend,
+        an exception is raised.
+    """
     session = session_states.get(data.sessionId)
     if not session:
         raise HTTPException(status_code=404, detail="Session ID not found.")
@@ -298,6 +334,21 @@ async def add_new_points(data: ClickData):
 
 @app.post("/propagate_in_video")
 async def propagate_and_save_masks(data: PropagateData):
+    """POST endpoint for initializing MedSAM2 inference based on given mask prompts.
+
+    POST endpoint that starts the propogation process using MedSAM2, only after
+    annotations are available, results in masks being generated for the entire video.
+
+    Args:
+        data: PropagateData object, which tells the model from which timestamp of which session,
+        inference needs to be done on.
+
+    Raises:
+        HTTPException: This exception is raised if session doesnt exist for the given data.
+        OutOfMemoryError: This happens if there is not enough VRAM to process the entire video,
+        resulting in inference being incomplete and then terminated.
+
+    """
     sessionId = data.sessionId
     session = session_states.get(sessionId)
     if not session:
@@ -330,17 +381,32 @@ async def propagate_and_save_masks(data: PropagateData):
 
 @app.post("/generate_video")
 async def generate_video(data: GenerateData):
+    """POST: Generates the final video based on the propogated masks.
+
+    POST endpoint that generates the final preview video in webm format by overlaying
+    the generated masks and the original frames together, assigning unique colors to
+    each unique object, currently this is the biggest bottleneck and can be optimized
+    in the future if computing time is a big concern.
+
+    Args:
+        data: Contains session id information.
+
+    Raises:
+        HTTPException: Raises if SessionID in the given payload is invalid.
+        HTTPException: Raises if this endpoint is called before /propogate_in_video
+        HTTPException: Raises if original extracted frames is not present in the specified path.
+        HTTPException: Raises if video in the original resolution is not found in the specified path.
+        HTTPException: Raises if either ffmpeg or cv2 experiences errors when processing the frames
+    """
     session = session_states.get(data.sessionId)
     if not session:
         raise HTTPException(status_code=404, detail="Session ID not found.")
-
     results = session.get("results")
     if not results:
         raise HTTPException(
             status_code=400,
             detail="Masks have not been generated. Call /propagate_in_video first.",
         )
-
     frames_dir = session["frames_dir"]
     output_dir = os.path.join(frames_dir, "output")
     os.makedirs(output_dir, exist_ok=True)
@@ -359,83 +425,209 @@ async def generate_video(data: GenerateData):
             status_code=500, detail="Original video dimensions not found in session."
         )
 
-    colors = [
-        (255, 0, 0),
-        (0, 255, 0),
-        (0, 0, 255),
-        (255, 255, 0),
-        (255, 0, 255),
-        (0, 255, 255),
-    ]
+    # Pre-define colors as numpy arrays for faster access
+    colors = np.array(
+        [
+            [255, 0, 0],  # Red
+            [0, 255, 0],  # Green
+            [0, 0, 255],  # Blue
+            [255, 255, 0],  # Yellow
+            [255, 0, 255],  # Magenta
+            [0, 255, 255],  # Cyan
+            [255, 128, 0],  # Orange
+            [128, 0, 255],  # Purple
+            [255, 192, 203],  # Pink
+            [128, 255, 0],  # Lime
+            [255, 165, 0],  # Dark Orange
+            [0, 128, 255],  # Sky Blue
+            [255, 69, 0],  # Red Orange
+            [50, 205, 50],  # Lime Green
+            [255, 20, 147],  # Deep Pink
+            [0, 191, 255],  # Deep Sky Blue
+            [255, 215, 0],  # Gold
+            [138, 43, 226],  # Blue Violet
+            [220, 20, 60],  # Crimson
+            [32, 178, 170],  # Light Sea Green
+        ],
+        dtype=np.uint8,
+    )
 
-    for frame_filename in frame_files:
+    # Pre-compute morphological kernels (optimized shapes)
+    border_kernel = np.ones((3, 3), np.uint8)
+    border_kernel_large = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+    # Option: Skip borders entirely for speed (uncomment next line)
+    # SKIP_BORDERS = True  # 3-5x faster, but no white borders around masks
+    SKIP_BORDERS = True
+
+    # Process frames in batches to reduce memory pressure
+    batch_size = min(8, len(frame_files))  # Adjust based on available RAM
+
+    def process_frame_batch(frame_batch):
+        """Process multiple frames in parallel"""
+        with ThreadPoolExecutor(max_workers=min(4, len(frame_batch))) as executor:
+            futures = []
+            for frame_info in frame_batch:
+                future = executor.submit(process_single_frame, frame_info)
+                futures.append(future)
+
+            # Wait for all frames in batch to complete
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.error(f"Error processing frame: {e}")
+
+    def process_single_frame(frame_info):
+        """Optimized single frame processing"""
+        frame_filename, frame_idx_from_file, model_frame_idx = frame_info
+
         input_image_path = os.path.join(frames_dir, frame_filename)
-
-        try:
-            frame_idx_from_file = int(os.path.splitext(frame_filename)[0])
-        except ValueError:
-            continue
-
         output_image_path = os.path.join(output_dir, f"{frame_idx_from_file:03d}.png")
+
+        # Load image once
         input_image = cv2.imread(input_image_path)
+        if input_image is None:
+            return
+
+        frame_height, frame_width = input_image.shape[:2]
+
+        # Create overlay as a copy
         overlay = input_image.copy()
 
-        model_frame_idx = frame_idx_from_file - 1
         frame_results = results.get(model_frame_idx)
-
         if frame_results:
-            for result in frame_results:
-                object_id = result.get("objectId", 0)
-                color = colors[object_id % len(colors)]
+            # Pre-allocate combined mask array
+            all_masks = []
+            object_colors = []
 
-                # FIXED: Handle the RLE list properly
+            for idx, result in enumerate(frame_results):
+                color_idx = idx % len(colors)
+                color = colors[color_idx]
+
+                # Process RLE masks more efficiently
                 rle_list = result["mask"]
-
-                # Create a combined mask from all RLE parts
                 combined_mask = None
+
                 for rle_dict in rle_list:
                     single_mask = rle_to_mask(rle_dict)
-                    single_mask_array = np.array(single_mask).reshape(
-                        input_image.shape[:2]
+                    single_mask_array = np.array(single_mask, dtype=np.uint8).reshape(
+                        frame_height, frame_width
                     )
 
                     if combined_mask is None:
                         combined_mask = single_mask_array
                     else:
-                        combined_mask = np.logical_or(combined_mask, single_mask_array)
+                        combined_mask = np.logical_or(
+                            combined_mask, single_mask_array
+                        ).astype(np.uint8)
 
                 if combined_mask is not None:
-                    object_mask_bool = combined_mask.astype(bool)
+                    all_masks.append(combined_mask)
+                    object_colors.append(color)
 
-                    # Add filled mask
-                    overlay[object_mask_bool] = color
+            # Apply all masks in vectorized operations
+            if all_masks:
+                # FASTEST OPTION: Skip borders entirely (3-5x speed improvement)
+                if SKIP_BORDERS:
+                    for mask, color in zip(all_masks, object_colors):
+                        mask_bool = mask.astype(bool)
+                        overlay[mask_bool] = color
 
-                    # Add border to masks
-                    kernel = np.ones((3, 3), np.uint8)
-                    dilated = cv2.dilate(
-                        combined_mask.astype(np.uint8), kernel, iterations=2
-                    )
-                    eroded = cv2.erode(
-                        combined_mask.astype(np.uint8), kernel, iterations=1
-                    )
-                    border = dilated - eroded
-                    border_mask = border.astype(bool)
-                    overlay[border_mask] = (255, 255, 255)  # White border
+                # FAST OPTION: Approximate borders using contours (2-3x speed improvement)
+                elif len(all_masks) > 2:
+                    for mask, color in zip(all_masks, object_colors):
+                        mask_bool = mask.astype(bool)
+                        overlay[mask_bool] = color
 
-        alpha = 0.5
-        blended_image = cv2.addWeighted(overlay, alpha, input_image, 1 - alpha, 0)
+                        # Fast border approximation using contours
+                        contours, _ = cv2.findContours(
+                            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                        )
+                        cv2.drawContours(
+                            overlay, contours, -1, (255, 255, 255), thickness=2
+                        )
 
-        upsampled_blended_image = cv2.resize(
-            blended_image,
-            (original_width, original_height),
-            interpolation=cv2.INTER_LINEAR,
+                # MEDIUM SPEED: Batch morphological operations
+                elif len(all_masks) > 1:
+                    # Batch dilate and erode operations
+                    dilated_masks = []
+                    eroded_masks = []
+
+                    for mask in all_masks:
+                        dilated_masks.append(
+                            cv2.dilate(mask, border_kernel, iterations=2)
+                        )
+                        eroded_masks.append(
+                            cv2.erode(mask, border_kernel, iterations=1)
+                        )
+
+                    # Apply all masks and borders
+                    for mask, color, dilated, eroded in zip(
+                        all_masks, object_colors, dilated_masks, eroded_masks
+                    ):
+                        mask_bool = mask.astype(bool)
+                        overlay[mask_bool] = color
+
+                        border = dilated - eroded
+                        border_mask = border.astype(bool)
+                        overlay[border_mask] = [255, 255, 255]
+
+                # SLOW BUT PRECISE: Single-pass morphological gradient
+                else:
+                    for mask, color in zip(all_masks, object_colors):
+                        mask_bool = mask.astype(bool)
+                        overlay[mask_bool] = color
+
+                        # Single-pass border detection using morphological gradient
+                        border = cv2.morphologyEx(
+                            mask, cv2.MORPH_GRADIENT, border_kernel_large
+                        )
+                        border_mask = border.astype(bool)
+                        overlay[border_mask] = [255, 255, 255]
+
+        # Blend images
+        alpha = 0.2
+        cv2.addWeighted(overlay, alpha, input_image, 1 - alpha, 0, overlay)
+
+        # Resize only once at the end
+        if (frame_width != original_width) or (frame_height != original_height):
+            overlay = cv2.resize(
+                overlay,
+                (original_width, original_height),
+                interpolation=cv2.INTER_LINEAR,
+            )
+
+        # Write output
+        cv2.imwrite(output_image_path, overlay)
+
+    # Prepare frame information
+    frame_info_list = []
+    for frame_filename in frame_files:
+        try:
+            frame_idx_from_file = int(os.path.splitext(frame_filename)[0])
+            model_frame_idx = frame_idx_from_file - 1
+            frame_info_list.append(
+                (frame_filename, frame_idx_from_file, model_frame_idx)
+            )
+        except ValueError:
+            continue
+
+    # Process frames in batches
+    for i in range(0, len(frame_info_list), batch_size):
+        batch = frame_info_list[i : i + batch_size]
+        process_frame_batch(batch)
+
+        # Optional: Log progress
+        progress = min(i + batch_size, len(frame_info_list))
+        logger.info(
+            f"[{data.sessionId}] Processed {progress}/{len(frame_info_list)} frames"
         )
 
-        cv2.imwrite(output_image_path, upsampled_blended_image)
-
     logger.info(f"[{data.sessionId}] All frames masked. Creating final video file...")
-    output_video_path = os.path.join(frames_dir, "output.webm")
 
+    # Optimized FFmpeg command with better encoding settings
+    output_video_path = os.path.join(frames_dir, "output.webm")
     ffmpeg_command = [
         "ffmpeg",
         "-y",
@@ -449,9 +641,24 @@ async def generate_video(data: GenerateData):
         "yuv420p",
         "-b:v",
         "2M",
+        "-threads",
+        "0",  # Use all available CPU cores
+        "-tile-columns",
+        "2",  # VP9 optimization
+        "-frame-parallel",
+        "1",  # VP9 optimization
+        "-speed",
+        "2",  # Balance between speed and quality
         output_video_path,
     ]
-    subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
+
+    try:
+        subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg error: {e.stderr}")
+        raise HTTPException(status_code=500, detail="Video encoding failed")
+
+    # Cleanup
     shutil.rmtree(output_dir)
 
     logger.info(f"[{data.sessionId}] Video generation complete. Sending file.")
@@ -462,6 +669,16 @@ async def generate_video(data: GenerateData):
 
 @app.delete("/delete_session/{session_id}")
 async def delete_session(session_id: str):
+    """Used for invalidating a specified session.
+
+    Invalidates a specified session and frees up resources used by the session to be deleted.
+
+    Args:
+        session_id: string representing the session to delete.
+
+    Raises:
+        HTTPException: Raises when a session_id that does not exist is requested to be deleted.
+    """
     session = session_states.pop(session_id, None)
     if not session:
         raise HTTPException(status_code=404, detail="Session ID not found.")
@@ -471,7 +688,6 @@ async def delete_session(session_id: str):
         shutil.rmtree(frames_dir)
     logger.info(f"[{session_id}] Session deleted and files cleaned up.")
     return {"message": "Session deleted successfully."}
-
 
 # --- Main execution ---
 if __name__ == "__main__":
