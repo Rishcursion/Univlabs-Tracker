@@ -1,11 +1,9 @@
 import base64
-import concurrent.futures
 import logging
 import os
 import shutil
 import subprocess
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
 import cv2
@@ -373,6 +371,7 @@ async def propagate_and_save_masks(data: PropagateData):
     logger.info(
         f"[{sessionId}] Propagation complete. {len(session['results'])} frames processed."
     )
+    predictor.reset_state(inference_state)
     return {
         "sessionId": sessionId,
         "message": "Propagation complete. Masks are generated and saved in session.",
@@ -461,50 +460,48 @@ async def generate_video(data: GenerateData):
     # SKIP_BORDERS = True  # 3-5x faster, but no white borders around masks
     SKIP_BORDERS = True
 
-    # Process frames in batches to reduce memory pressure
-    batch_size = min(8, len(frame_files))  # Adjust based on available RAM
-
-    def process_frame_batch(frame_batch):
-        """Process multiple frames in parallel"""
-        with ThreadPoolExecutor(max_workers=min(4, len(frame_batch))) as executor:
-            futures = []
-            for frame_info in frame_batch:
-                future = executor.submit(process_single_frame, frame_info)
-                futures.append(future)
-
-            # Wait for all frames in batch to complete
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    future.result()
-                except Exception as e:
-                    logger.error(f"Error processing frame: {e}")
-
-    def process_single_frame(frame_info):
+    # Process frames sequentially to ensure all files are created
+    def process_single_frame(frame_filename, output_frame_idx):
         """Optimized single frame processing"""
-        frame_filename, frame_idx_from_file, model_frame_idx = frame_info
 
         input_image_path = os.path.join(frames_dir, frame_filename)
-        output_image_path = os.path.join(output_dir, f"{frame_idx_from_file:03d}.png")
+        output_image_path = os.path.join(output_dir, f"{output_frame_idx:03d}.png")
 
         # Load image once
         input_image = cv2.imread(input_image_path)
         if input_image is None:
-            return
+            logger.error(f"Could not load image: {input_image_path}")
+            return False
 
         frame_height, frame_width = input_image.shape[:2]
 
         # Create overlay as a copy
         overlay = input_image.copy()
 
+        # The model frame index corresponds to the propagation results
+        model_frame_idx = (
+            output_frame_idx - 1
+        )  # Convert from 1-based to 0-based indexing
+
         frame_results = results.get(model_frame_idx)
         if frame_results:
+            logger.debug(
+                f"Processing frame {output_frame_idx} with {len(frame_results)} objects"
+            )
             # Pre-allocate combined mask array
             all_masks = []
             object_colors = []
 
-            for idx, result in enumerate(frame_results):
-                color_idx = obj_color[idx]
-                color = colors[color_idx]
+            for result in frame_results:
+                obj_id = result["objectId"]
+                # Get color for this object ID
+                if obj_id in obj_color:
+                    color = obj_color[obj_id]
+                else:
+                    # Assign a default color if not found
+                    color_idx = obj_id % len(colors)
+                    color = tuple(colors[color_idx].tolist())
+                    obj_color[obj_id] = color
 
                 # Process RLE masks more efficiently
                 rle_list = result["mask"]
@@ -600,61 +597,119 @@ async def generate_video(data: GenerateData):
             )
 
         # Write output
-        cv2.imwrite(output_image_path, overlay)
+        success = cv2.imwrite(output_image_path, overlay)
+        if not success:
+            logger.error(f"Failed to write image: {output_image_path}")
+            return False
 
-    # Prepare frame information
-    frame_info_list = []
-    for frame_filename in frame_files:
-        try:
-            frame_idx_from_file = int(os.path.splitext(frame_filename)[0])
-            model_frame_idx = frame_idx_from_file - 1
-            frame_info_list.append(
-                (frame_filename, frame_idx_from_file, model_frame_idx)
+        logger.debug(f"Successfully wrote frame: {output_image_path}")
+        return True
+
+    # Process all frames sequentially to ensure consistency
+    successful_frames = 0
+    for i, frame_filename in enumerate(frame_files):
+        output_frame_idx = i + 1  # FFmpeg expects 1-based indexing for %03d format
+
+        success = process_single_frame(frame_filename, output_frame_idx)
+        if success:
+            successful_frames += 1
+
+        # Log progress every 10 frames
+        if (i + 1) % 10 == 0:
+            logger.info(
+                f"[{data.sessionId}] Processed {i + 1}/{len(frame_files)} frames"
             )
-        except ValueError:
-            continue
 
-    # Process frames in batches
-    for i in range(0, len(frame_info_list), batch_size):
-        batch = frame_info_list[i : i + batch_size]
-        process_frame_batch(batch)
+    logger.info(
+        f"[{data.sessionId}] Successfully processed {successful_frames}/{len(frame_files)} frames"
+    )
 
-        # Optional: Log progress
-        progress = min(i + batch_size, len(frame_info_list))
-        logger.info(
-            f"[{data.sessionId}] Processed {progress}/{len(frame_info_list)} frames"
+    # Verify that output files exist before calling FFmpeg
+    output_files = sorted([f for f in os.listdir(output_dir) if f.endswith(".png")])
+    if not output_files:
+        raise HTTPException(
+            status_code=500,
+            detail="No output frames were generated. Check mask propagation results.",
         )
+
+    logger.info(
+        f"[{data.sessionId}] Found {len(output_files)} output frames: {output_files[:5]}..."
+    )
 
     logger.info(f"[{data.sessionId}] All frames masked. Creating final video file...")
 
-    # Optimized FFmpeg command with better encoding settings
+    # Use a fallback FFmpeg command if NVENC is not available
     output_video_path = os.path.join(frames_dir, "output.webm")
-    ffmpeg_command = [
-        "ffmpeg",
-        "-y",
-        "-framerate",
-        "24",
-        "-i",
-        f"{output_dir}/%03d.png",
-        "-c:v",
-        "vp9_nvenc",  # Use the NVIDIA hardware encoder for VP9
-        "-pix_fmt",
-        "yuv420p",
-        "-b:v",
-        "2M",
-        "-rc",
-        "vbr",  # Use variable bitrate for rate control
-        "-cq",
-        "28",  # Constant quality mode (0-51, lower is better)
-        "-preset",
-        "fast",  # NVENC has its own presets: slow, medium, fast, hq, etc.
-        output_video_path,
+
+    # Try NVENC first, fall back to software encoding if it fails
+    ffmpeg_commands = [
+        # NVENC command (faster if available)
+        [
+            "ffmpeg",
+            "-y",
+            "-framerate",
+            "24",
+            "-i",
+            f"{output_dir}/%03d.png",
+            "-c:v",
+            "vp9_nvenc",
+            "-pix_fmt",
+            "yuv420p",
+            "-b:v",
+            "2M",
+            "-rc",
+            "vbr",
+            "-cq",
+            "28",
+            "-preset",
+            "fast",
+            output_video_path,
+        ],
+        # Software fallback command
+        [
+            "ffmpeg",
+            "-y",
+            "-framerate",
+            "24",
+            "-i",
+            f"{output_dir}/%03d.png",
+            "-c:v",
+            "libvpx-vp9",
+            "-pix_fmt",
+            "yuv420p",
+            "-b:v",
+            "2M",
+            "-crf",
+            "28",
+            "-preset",
+            "fast",
+            output_video_path,
+        ],
     ]
-    try:
-        subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        logger.error(f"FFmpeg error: {e.stderr}")
-        raise HTTPException(status_code=500, detail="Video encoding failed")
+
+    video_created = False
+    for i, ffmpeg_command in enumerate(ffmpeg_commands):
+        try:
+            result = subprocess.run(
+                ffmpeg_command, check=True, capture_output=True, text=True
+            )
+            logger.info(
+                f"[{data.sessionId}] Video created successfully using {'NVENC' if i == 0 else 'software'} encoding"
+            )
+            video_created = True
+            break
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"FFmpeg command {i+1} failed: {e.stderr}")
+            if i == len(ffmpeg_commands) - 1:  # Last command failed
+                logger.error(f"All FFmpeg commands failed. Last error: {e.stderr}")
+                raise HTTPException(
+                    status_code=500, detail=f"Video encoding failed: {e.stderr}"
+                )
+
+    if not video_created:
+        raise HTTPException(
+            status_code=500, detail="Failed to create video with any encoding method"
+        )
 
     # Cleanup
     shutil.rmtree(output_dir)
