@@ -373,7 +373,6 @@ async def propagate_and_save_masks(data: PropagateData):
     logger.info(
         f"[{sessionId}] Propagation complete. {len(session['results'])} frames processed."
     )
-    predictor.reset_state(inference_state)
     return {
         "sessionId": sessionId,
         "message": "Propagation complete. Masks are generated and saved in session.",
