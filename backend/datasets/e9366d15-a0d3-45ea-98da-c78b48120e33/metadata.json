@@ -1,0 +1,23 @@
+{
+    "session_id": "e9366d15-a0d3-45ea-98da-c78b48120e33",
+    "original_video": "output.mp4",
+    "original_dims": [
+        1920,
+        1080
+    ],
+    "processing_dims": [
+        960,
+        540
+    ],
+    "user_metadata": {
+        "procedure": "laparoscopic_cholecystectomy",
+        "patientName": "",
+        "doctorName": "",
+        "surgeryOutcome": "",
+        "surgeryDate": "",
+        "patientAge": 0,
+        "complications": "",
+        "notes": ""
+    },
+    "frame_masks": {}
+}
